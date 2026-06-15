@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    "ea-imc-core",
+    "ea-imc-cli",
+]
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+rand = "0.8"
+csv = "1.3"

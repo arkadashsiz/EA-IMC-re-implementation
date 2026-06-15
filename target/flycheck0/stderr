@@ -1,0 +1,116 @@
+   0.051820500s  INFO prepare_target{force=false package_id=ea-imc-cli v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-cli) target="ea-imc-cli"}: cargo::core::compiler::fingerprint: fingerprint error for ea-imc-cli v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-cli)/Check { test: false }/TargetInner { name: "ea-imc-cli", doc: true, ..: with_path("C:\\Users\\Asus\\Desktop\\uni\\6\\LPSD\\Project\\phase2\\EA-IMC-re-implementation\\ea-imc-cli\\src\\main.rs", Edition2021) }
+   0.051872600s  INFO prepare_target{force=false package_id=ea-imc-cli v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-cli) target="ea-imc-cli"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\target\debug\.fingerprint\ea-imc-cli-b2490546d0111fa7\bin-ea-imc-cli`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.066685500s  INFO prepare_target{force=false package_id=ea-imc-core v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-core) target="ea_imc_core"}: cargo::core::compiler::fingerprint: fingerprint error for ea-imc-core v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-core)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("ea_imc_core", ["lib"], "C:\\Users\\Asus\\Desktop\\uni\\6\\LPSD\\Project\\phase2\\EA-IMC-re-implementation\\ea-imc-core\\src\\lib.rs", Edition2021) }
+   0.066715800s  INFO prepare_target{force=false package_id=ea-imc-core v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-core) target="ea_imc_core"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\target\debug\.fingerprint\ea-imc-core-243fb5690e65e2c2\lib-ea_imc_core`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_libgit2_prerelease
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: git_midx_writer_dump
+  18: git_filter_source_repo
+  19: git_midx_writer_dump
+  20: BaseThreadInitThunk
+  21: RtlUserThreadStart
+   0.073387800s  INFO prepare_target{force=false package_id=ea-imc-cli v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-cli) target="ea-imc-cli"}: cargo::core::compiler::fingerprint: fingerprint error for ea-imc-cli v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-cli)/Check { test: true }/TargetInner { name: "ea-imc-cli", doc: true, ..: with_path("C:\\Users\\Asus\\Desktop\\uni\\6\\LPSD\\Project\\phase2\\EA-IMC-re-implementation\\ea-imc-cli\\src\\main.rs", Edition2021) }
+   0.073417900s  INFO prepare_target{force=false package_id=ea-imc-cli v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-cli) target="ea-imc-cli"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\target\debug\.fingerprint\ea-imc-cli-b0be1c76a6c2c413\test-bin-ea-imc-cli`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.073966800s  INFO prepare_target{force=false package_id=ea-imc-core v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-core) target="ea_imc_core"}: cargo::core::compiler::fingerprint: fingerprint error for ea-imc-core v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-core)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("ea_imc_core", ["lib"], "C:\\Users\\Asus\\Desktop\\uni\\6\\LPSD\\Project\\phase2\\EA-IMC-re-implementation\\ea-imc-core\\src\\lib.rs", Edition2021) }
+   0.073992600s  INFO prepare_target{force=false package_id=ea-imc-core v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-core) target="ea_imc_core"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\target\debug\.fingerprint\ea-imc-core-db65ec311daff25b\test-lib-ea_imc_core`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+    Checking ea-imc-core v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-core)
+    Checking ea-imc-cli v0.1.0 (C:\Users\Asus\Desktop\uni\6\LPSD\Project\phase2\EA-IMC-re-implementation\ea-imc-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.63s

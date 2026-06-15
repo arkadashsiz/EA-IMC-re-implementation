@@ -1,0 +1,13 @@
+[package]
+name = "ea-imc-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI for EA-IMC scheduling algorithm"
+
+[dependencies]
+ea-imc-core = { path = "../ea-imc-core" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+clap = { workspace = true }
+csv = { workspace = true }
