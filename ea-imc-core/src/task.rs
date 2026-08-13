@@ -38,9 +38,6 @@ impl Wcet {
         if lo < 0.0 || hi < 0.0 {
             return Err(Error::InvalidTaskSet("WCET values must be non-negative".into()));
         }
-        if hi < lo {
-            return Err(Error::InvalidTaskSet("HI WCET must be >= LO WCET".into()));
-        }
         Ok(Self { lo, hi })
     }
 
