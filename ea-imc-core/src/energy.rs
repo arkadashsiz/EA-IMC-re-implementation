@@ -1,72 +1,109 @@
+//! Energy model from Sec. 3.2 of Zhang (2023).
+//!
+//! Power: `P = P_s + h*(P_ind + C_ef * S^m)`, with static power `P_s = 0`
+//! (ignored, per the paper's stated common DVFS-research practice) and
+//! `h = 1` while active. Default parameters match the paper exactly:
+//! `P_ind = 0.01`, `C_ef = 1`, `m = 3`, giving critical speed
+//! `S_crit = (P_ind / ((m-1)*C_ef))^(1/m) ~= 0.17`.
+//!
+//! Two energy quantities are provided:
+//!  - [`PowerModel::normalized_energy_lo_mode`]: the *closed-form*
+//!    normalized energy consumption of a task set's LO-mode workload at a
+//!    given speed `S` (Eq. 2), which is what Figs. 5-8 / Sec. 6 of the
+//!    paper actually plot and what reproduces the paper's headline
+//!    "24.55% average energy reduction" result.
+//!  - [`EnergyModel::calculate_schedule_energy`]: energy computed by
+//!    integrating power over an *actual simulated schedule* (a
+//!    [`crate::schedule::Schedule`]), useful for the illustrative Table 1 /
+//!    Figs. 1-4 example and for sanity-checking the closed form.
+
+use crate::algorithm::Utilizations;
+use crate::error::Result;
 use crate::schedule::{Mode, Speed};
 use crate::task::TaskSet;
-use crate::{Error};
-use crate::error::Result;
+use crate::Error;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PowerModel {
-    pub static_power: f64,
-    pub dynamic_coefficient: f64,
-    pub voltage_at_max_freq: f64,
+    /// P_ind: speed-independent (I/O, memory) active power.
+    pub p_ind: f64,
+    /// C_ef: effective switching capacitance (dynamic-power coefficient).
+    pub c_ef: f64,
+    /// m: dynamic-power speed exponent (m >= 2).
+    pub m: f64,
+    /// P_s: static (leakage) power. The paper sets this to 0.
+    pub p_static: f64,
 }
 
 impl PowerModel {
-    pub fn new(static_power: f64, dynamic_coefficient: f64, voltage_at_max_freq: f64) -> Result<Self> {
-        if static_power < 0.0 {
-            return Err(Error::EnergyError("Static power must be >= 0".into()));
+    pub fn new(p_ind: f64, c_ef: f64, m: f64, p_static: f64) -> Result<Self> {
+        if p_ind < 0.0 {
+            return Err(Error::EnergyError("P_ind must be >= 0".into()));
         }
-        if dynamic_coefficient <= 0.0 {
-            return Err(Error::EnergyError("Dynamic coefficient must be > 0".into()));
+        if c_ef <= 0.0 {
+            return Err(Error::EnergyError("C_ef must be > 0".into()));
         }
-        if voltage_at_max_freq <= 0.0 {
-            return Err(Error::EnergyError("Voltage at max freq must be > 0".into()));
+        if m < 2.0 {
+            return Err(Error::EnergyError("m must be >= 2".into()));
         }
-        Ok(Self {
-            static_power,
-            dynamic_coefficient,
-            voltage_at_max_freq,
-        })
+        if p_static < 0.0 {
+            return Err(Error::EnergyError("P_static must be >= 0".into()));
+        }
+        Ok(Self { p_ind, c_ef, m, p_static })
     }
 
-    pub fn voltage(&self, speed: Speed) -> f64 {
-        self.voltage_at_max_freq * speed.value().sqrt()
+    /// Paper's default parameters (Sec. 3.2): P_ind=0.01, C_ef=1, m=3, P_s=0.
+    pub fn paper_default() -> Self {
+        Self { p_ind: 0.01, c_ef: 1.0, m: 3.0, p_static: 0.0 }
     }
 
-    pub fn frequency(&self, speed: Speed) -> f64 {
-        speed.value()
+    /// Active power at normalized speed `s`: `P_ind + C_ef * s^m` (plus
+    /// static power, if any).
+    pub fn power_active(&self, s: f64) -> f64 {
+        self.p_static + self.p_ind + self.c_ef * s.powf(self.m)
     }
 
-    pub fn power(&self, speed: Speed) -> f64 {
-        let v = self.voltage(speed);
-        let f = self.frequency(speed);
-        self.static_power + self.dynamic_coefficient * v * v * f
+    /// Energy-efficient critical speed: `S_crit = (P_ind/((m-1)*C_ef))^(1/m)`.
+    pub fn critical_speed(&self) -> f64 {
+        (self.p_ind / ((self.m - 1.0) * self.c_ef)).powf(1.0 / self.m)
     }
 
-    pub fn energy(&self, speed: Speed, duration: f64) -> f64 {
-        self.power(speed) * duration
+    /// Energy consumed running actively at speed `s` for `duration` time
+    /// units.
+    pub fn energy(&self, s: f64, duration: f64) -> f64 {
+        self.power_active(s) * duration
+    }
+
+    /// Eq. (2): normalized energy consumption over one hyper-period of a
+    /// task set's LO-mode workload, run entirely at normalized speed `s`:
+    ///
+    /// `NE(Gamma, S) = (P_ind + C_ef*S^m) * (U_LO_LO(Gamma) + U_LO_HI(Gamma)) / S`
+    ///
+    /// This is the quantity plotted in Figs. 5-8 (the paper states it
+    /// focuses only on LO-mode normalized energy consumption, which is
+    /// independent of the number of tasks and the hyper-period, depending
+    /// only on total LO-mode utilization and speed).
+    pub fn normalized_energy_lo_mode(&self, taskset: &TaskSet, s: f64) -> f64 {
+        let u = Utilizations::of(taskset);
+        self.normalized_energy_lo_mode_for_u(&u, s)
+    }
+
+    /// Same as [`Self::normalized_energy_lo_mode`] but taking pre-computed
+    /// utilizations directly (useful for sweeps that vary utilization
+    /// without constructing a concrete task set, as in Sec. 6.2).
+    pub fn normalized_energy_lo_mode_for_u(&self, u: &Utilizations, s: f64) -> f64 {
+        if s <= 0.0 {
+            return f64::INFINITY;
+        }
+        self.power_active(s) * u.u_lo_total() / s
     }
 }
 
 impl Default for PowerModel {
     fn default() -> Self {
-        Self {
-            static_power: 0.1,
-            dynamic_coefficient: 1.0,
-            voltage_at_max_freq: 1.0,
-        }
+        Self::paper_default()
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnergyResult {
-    pub total_energy: f64,
-    pub lo_mode_energy: f64,
-    pub hi_mode_energy: f64,
-    pub idle_energy: f64,
-    pub mode_switch_energy: f64,
-    pub per_task_energy: std::collections::HashMap<String, f64>,
-    pub energy_breakdown: EnergyBreakdown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +111,15 @@ pub struct EnergyBreakdown {
     pub static_energy: f64,
     pub dynamic_energy: f64,
     pub by_mode: std::collections::HashMap<Mode, f64>,
-    pub by_speed: Vec<(Speed, f64)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnergyResult {
+    pub total_energy: f64,
+    pub lo_mode_energy: f64,
+    pub hi_mode_energy: f64,
+    pub mode_switch_energy: f64,
+    pub energy_breakdown: EnergyBreakdown,
 }
 
 impl EnergyResult {
@@ -83,14 +128,11 @@ impl EnergyResult {
             total_energy: 0.0,
             lo_mode_energy: 0.0,
             hi_mode_energy: 0.0,
-            idle_energy: 0.0,
             mode_switch_energy: 0.0,
-            per_task_energy: std::collections::HashMap::new(),
             energy_breakdown: EnergyBreakdown {
                 static_energy: 0.0,
                 dynamic_energy: 0.0,
                 by_mode: std::collections::HashMap::new(),
-                by_speed: Vec::new(),
             },
         }
     }
@@ -102,6 +144,10 @@ impl Default for EnergyResult {
     }
 }
 
+/// Computes energy by integrating the power model over an actual simulated
+/// [`crate::schedule::Schedule`] (including idle intervals, which draw
+/// `power_active(s)` at whatever the "current" mode's nominal speed is,
+/// matching the paper's treatment of DVFS-exploitable idle time, Sec. 4.1).
 pub struct EnergyModel {
     power_model: PowerModel,
 }
@@ -111,55 +157,45 @@ impl EnergyModel {
         Self { power_model }
     }
 
-    pub fn calculate_schedule_energy(
-    &self,
-    schedule: &crate::schedule::Schedule,
-    taskset: &TaskSet,
-    slo: Speed,
-) -> EnergyResult {
-    let mut result = EnergyResult::new();
-    let mut last_time = 0.0;
-    let mut current_speed = slo;
-    let mut current_mode = Mode::LO;
-
-    for event in &schedule.events {
-        let duration = event.time - last_time;
-        if duration > 1e-9 {
-            let energy = self.power_model.energy(current_speed, duration);
-            result.total_energy += energy;
-
-            match current_mode {
-                Mode::LO => result.lo_mode_energy += energy,
-                Mode::HI => result.hi_mode_energy += energy,
-            }
-
-            *result.energy_breakdown.by_mode.entry(current_mode).or_default() += energy;
-            // Push to vector instead of using entry
-            result.energy_breakdown.by_speed.push((current_speed, energy));
-
-            let v = self.power_model.voltage(current_speed);
-            let f = self.power_model.frequency(current_speed);
-            let static_e = self.power_model.static_power * duration;
-            let dynamic_e = self.power_model.dynamic_coefficient * v * v * f * duration;
-            result.energy_breakdown.static_energy += static_e;
-            result.energy_breakdown.dynamic_energy += dynamic_e;
-        }
-
-        if event.event_type == crate::schedule::EventType::ModeSwitch {
-            current_mode = Mode::HI;
-            current_speed = Speed::MAX;
-            result.mode_switch_energy += self.power_model.energy(Speed::MAX, 0.001);
-        }
-
-        if event.event_type == crate::schedule::EventType::JobStart
-            || event.event_type == crate::schedule::EventType::JobResume
-        {
-            current_speed = event.speed;
-        }
-
-        last_time = event.time;
+    pub fn power_model(&self) -> &PowerModel {
+        &self.power_model
     }
 
-    result
-}
+    pub fn calculate_schedule_energy(
+        &self,
+        schedule: &crate::schedule::Schedule,
+        s_lo: Speed,
+        s_max: Speed,
+    ) -> EnergyResult {
+        let mut result = EnergyResult::new();
+        let mut last_time = 0.0;
+        let mut mode = Mode::LO;
+
+        let speed_for = |mode: Mode| if mode == Mode::LO { s_lo.value() } else { s_max.value() };
+
+        for event in &schedule.events {
+            let duration = event.time - last_time;
+            if duration > 1e-9 {
+                let s = speed_for(mode);
+                let e = self.power_model.energy(s, duration);
+                result.total_energy += e;
+                match mode {
+                    Mode::LO => result.lo_mode_energy += e,
+                    Mode::HI => result.hi_mode_energy += e,
+                }
+                *result.energy_breakdown.by_mode.entry(mode).or_default() += e;
+                result.energy_breakdown.static_energy += self.power_model.p_static * duration;
+                result.energy_breakdown.dynamic_energy +=
+                    self.power_model.c_ef * s.powf(self.power_model.m) * duration;
+            }
+
+            if event.event_type == crate::schedule::EventType::ModeSwitch {
+                mode = Mode::HI;
+            }
+
+            last_time = event.time;
+        }
+
+        result
+    }
 }

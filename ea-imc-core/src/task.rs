@@ -34,6 +34,14 @@ pub struct Wcet {
 }
 
 impl Wcet {
+    /// Construct a WCET pair without enforcing an ordering between `lo` and `hi`.
+    ///
+    /// Per the IMC task model (Zhang 2023, Sec. 3.1): for a HI-criticality task
+    /// `C_i(LO) <= C_i(HI)` (execution time increases after the mode switch),
+    /// whereas for a LO-criticality task `C_i(LO) >= C_i(HI)` (the task receives
+    /// *degraded* service in HI mode). Because the correct ordering depends on
+    /// the task's criticality level, it is validated in [`Task::new`] instead of
+    /// here.
     pub fn new(lo: f64, hi: f64) -> Result<Self> {
         if lo < 0.0 || hi < 0.0 {
             return Err(Error::InvalidTaskSet("WCET values must be non-negative".into()));
@@ -79,6 +87,24 @@ impl Task {
             return Err(Error::InvalidTaskSet("Period must be positive".into()));
         }
         let wcet = Wcet::new(wcet_lo, wcet_hi)?;
+        match criticality {
+            Criticality::HI => {
+                if wcet.hi < wcet.lo {
+                    return Err(Error::InvalidTaskSet(format!(
+                        "HI task {}: C(HI)={} must be >= C(LO)={} (execution grows in HI mode)",
+                        id, wcet.hi, wcet.lo
+                    )));
+                }
+            }
+            Criticality::LO => {
+                if wcet.hi > wcet.lo {
+                    return Err(Error::InvalidTaskSet(format!(
+                        "LO task {}: C(HI)={} must be <= C(LO)={} (degraded service in HI mode)",
+                        id, wcet.hi, wcet.lo
+                    )));
+                }
+            }
+        }
         let deadline = None;
         Ok(Self {
             id,
@@ -142,9 +168,6 @@ impl TaskSet {
             id_map.insert(task.id, idx);
         }
 
-        let has_hi = tasks.iter().any(|t| t.is_hi());
-        let has_lo = tasks.iter().any(|t| t.is_lo());
-
         Ok(Self { tasks, id_map })
     }
 
@@ -186,6 +209,35 @@ impl TaskSet {
 
     pub fn lo_utilization_lo(&self, speed: f64) -> f64 {
         self.lo_tasks().iter().map(|t| t.utilization_lo(speed)).sum()
+    }
+
+    /// U^{HI}_{HI}(Γ): sum of HI-mode utilization of HI-criticality tasks.
+    pub fn hi_utilization_hi(&self, speed: f64) -> f64 {
+        self.hi_tasks().iter().map(|t| t.utilization_hi(speed)).sum()
+    }
+
+    /// U^{HI}_{LO}(Γ): sum of HI-mode (degraded) utilization of LO-criticality tasks.
+    pub fn lo_utilization_hi(&self, speed: f64) -> f64 {
+        self.lo_tasks().iter().map(|t| t.utilization_hi(speed)).sum()
+    }
+
+    /// Hyper-period of the task set, i.e. LCM of all periods. Periods are
+    /// rounded to the nearest integer millisecond-like unit for the LCM
+    /// computation, which is exact for the integer-period task sets used
+    /// throughout the paper (Tables 1-3).
+    pub fn hyperperiod(&self) -> f64 {
+        fn gcd(a: u64, b: u64) -> u64 {
+            if b == 0 { a } else { gcd(b, a % b) }
+        }
+        fn lcm(a: u64, b: u64) -> u64 {
+            a / gcd(a, b) * b
+        }
+        let mut hp: u64 = 1;
+        for t in &self.tasks {
+            let p = t.period.round().max(1.0) as u64;
+            hp = lcm(hp, p);
+        }
+        hp as f64
     }
 }
 

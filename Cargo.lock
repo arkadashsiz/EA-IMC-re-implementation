@@ -132,6 +132,7 @@ dependencies = [
  "clap",
  "csv",
  "ea-imc-core",
+ "rand",
  "serde",
  "serde_json",
  "thiserror",

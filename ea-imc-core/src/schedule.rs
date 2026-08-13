@@ -1,4 +1,4 @@
-use crate::task::{Criticality, Task, TaskId};
+use crate::task::{Criticality, TaskId};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
