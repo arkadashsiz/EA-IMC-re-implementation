@@ -58,7 +58,7 @@ def plot_trace(csv_name: str, title: str, out_name: str, switch_time: float | No
     df = pd.read_csv(DATA_DIR / csv_name)
     intervals = build_intervals(df)
 
-    tasks = sorted(df["task"].unique(), reverse=True)
+    tasks = sorted(df.loc[df["task"] != "idle", "task"].unique(), reverse=True)
     y_pos = {t: i for i, t in enumerate(tasks)}
 
     fig, ax = plt.subplots(figsize=(11, 0.9 * len(tasks) + 1.5))

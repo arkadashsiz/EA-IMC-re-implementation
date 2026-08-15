@@ -578,18 +578,18 @@ fn simulate_schedule(
                     event_type: EventType::JobComplete,
                     remaining_execution: 0.0,
                 });
-                let key = (j.task_id, j.release.to_bits());
-                if running_key == Some(key) {
-                    running_key = None;
-                }
-            }
-        }
-        // Any job suspended by a mode switch (handled above) that happened
-        // to be the currently-running job also frees up the processor.
-        for j in ready.iter().filter(|j| j.suspended) {
-            let key = (j.task_id, j.release.to_bits());
-            if running_key == Some(key) {
-                running_key = None;
+                // Note: `running_key` is deliberately *not* cleared here.
+                // It represents "the job identity last reported to the
+                // event log as running", and is only ever updated by the
+                // Start/Resume/Idle emission block at the top of the loop,
+                // which compares it against the next iteration's freshly
+                // computed `sel` to decide whether a JobStart/JobResume/
+                // IdleStart event is due. Clearing it here would make that
+                // comparison spuriously succeed (both sides `None`) and
+                // silently suppress the IdleStart event for any gap that
+                // follows a completion with nothing else ready -- which is
+                // exactly the common case (see e.g. the [10, 12] idle gap
+                // in the Table 1 example's LO-mode trace).
             }
         }
         ready.retain(|j| !j.suspended && j.executed < j.budget - 1e-6);
@@ -654,5 +654,75 @@ mod tests {
         let u = Utilizations::of(&ts);
         assert!(lemma1_lo_mode_schedulable(&u, 0.5));
         assert!(lemma2_hi_mode_schedulable(&u, 0.5));
+    }
+
+    /// Regression test for a bug where idle intervals were never emitted
+    /// as `IdleStart` events in the simulated schedule (the internal
+    /// `running_key` tracker was cleared too early, on job completion,
+    /// instead of only when the Start/Resume/Idle emission logic itself
+    /// observed a transition). This silently made every gap in the
+    /// schedule "invisible" to any energy/visualization code that trusts
+    /// the event log, and inflated schedule-based energy figures by
+    /// roughly 1/(utilization) since idle time was implicitly charged
+    /// full active power.
+    #[test]
+    fn simulator_emits_idle_events_for_genuine_gaps() {
+        let ts = table1_taskset();
+        let sched = EaImcScheduler::default();
+        let cfg = EaImcConfig {
+            x: 0.5,
+            s_lo: 1.0,
+            s_max: 1.0,
+            utilizations: Utilizations::of(&ts),
+        };
+        let trace = sched
+            .simulate(&ts, &cfg, Overrun::None, SimHorizon::OneHyperperiod)
+            .unwrap();
+        let idle_count = trace
+            .events
+            .iter()
+            .filter(|e| e.event_type == EventType::IdleStart)
+            .count();
+        // At S_max = 1 the Table 1 task set has total utilization 2/3, so
+        // roughly a third of the hyperperiod must be idle, split across
+        // several distinct gaps (not just one at the very end).
+        assert!(idle_count >= 3, "expected several idle gaps, got {idle_count}");
+    }
+
+    /// The energy computed by integrating the power model over the
+    /// simulated schedule (only counting busy intervals) should match the
+    /// closed-form Eq. (2) energy for the same scenario when the whole
+    /// horizon runs in a single mode (no mode switch): both are just
+    /// `(P_ind + C_ef*S^m) * (total execution time) / hyperperiod`.
+    #[test]
+    fn schedule_energy_matches_closed_form_when_no_mode_switch() {
+        use crate::energy::{EnergyModel, PowerModel};
+        use crate::schedule::Speed;
+
+        let ts = table1_taskset();
+        let sched = EaImcScheduler::default();
+        let cfg = EaImcConfig {
+            x: 0.5,
+            s_lo: 1.0,
+            s_max: 1.0,
+            utilizations: Utilizations::of(&ts),
+        };
+        let trace = sched
+            .simulate(&ts, &cfg, Overrun::None, SimHorizon::OneHyperperiod)
+            .unwrap();
+
+        let pm = PowerModel::paper_default();
+        let em = EnergyModel::new(pm);
+        let result = em.calculate_schedule_energy(&trace, Speed(1.0), Speed(1.0));
+        let ne_simulated = result.total_energy / trace.hyperperiod;
+
+        let ne_closed_form = pm.normalized_energy_lo_mode(&ts, 1.0);
+        assert!(
+            (ne_simulated - ne_closed_form).abs() < 1e-6,
+            "simulated NE = {ne_simulated}, closed-form NE = {ne_closed_form}"
+        );
+        // Also matches the paper's own reported figure for this scenario
+        // (Sec. 5.3, energy of Fig. 1's trace): 0.67.
+        assert!((ne_simulated - 0.6733).abs() < 1e-3);
     }
 }

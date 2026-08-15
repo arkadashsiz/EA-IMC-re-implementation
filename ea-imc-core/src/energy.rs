@@ -161,6 +161,17 @@ impl EnergyModel {
         &self.power_model
     }
 
+    /// Computes energy by integrating the power model over an actual simulated
+    /// [`crate::schedule::Schedule`], but **only over intervals where the
+    /// processor is actively executing a job**. Per Eq. (1), power is
+    /// `P_s + h*(P_ind + C_ef*S^m)` with `h = 1` only "if the system is
+    /// active" -- idle intervals (the `IdleStart` events the simulator
+    /// emits whenever the ready queue empties) draw `h = 0`, i.e. no
+    /// dynamic/independent power at all (this matches the closed-form
+    /// Eq. (2), which only integrates over jobs' execution time and
+    /// likewise assigns zero energy to idle slack -- see Sec. 4.1's
+    /// discussion of "idle intervals ... exploited to reduce energy
+    /// consumption").
     pub fn calculate_schedule_energy(
         &self,
         schedule: &crate::schedule::Schedule,
@@ -170,12 +181,13 @@ impl EnergyModel {
         let mut result = EnergyResult::new();
         let mut last_time = 0.0;
         let mut mode = Mode::LO;
+        let mut active = false;
 
         let speed_for = |mode: Mode| if mode == Mode::LO { s_lo.value() } else { s_max.value() };
 
         for event in &schedule.events {
             let duration = event.time - last_time;
-            if duration > 1e-9 {
+            if duration > 1e-9 && active {
                 let s = speed_for(mode);
                 let e = self.power_model.energy(s, duration);
                 result.total_energy += e;
@@ -189,8 +201,13 @@ impl EnergyModel {
                     self.power_model.c_ef * s.powf(self.power_model.m) * duration;
             }
 
-            if event.event_type == crate::schedule::EventType::ModeSwitch {
-                mode = Mode::HI;
+            match event.event_type {
+                crate::schedule::EventType::ModeSwitch => mode = Mode::HI,
+                crate::schedule::EventType::JobStart | crate::schedule::EventType::JobResume => {
+                    active = true;
+                }
+                crate::schedule::EventType::IdleStart => active = false,
+                _ => {}
             }
 
             last_time = event.time;
