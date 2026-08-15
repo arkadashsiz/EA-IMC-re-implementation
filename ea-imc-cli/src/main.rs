@@ -26,20 +26,23 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Table 1 worked example from Sec. 4.1 / 5.3.
-    Example,
+    Example {
+        #[arg(long, default_value = "data")]
+        out_dir: PathBuf,
+    },
     /// Table 2 FMS avionics use-case + deadline-scaling-factor sweep (Fig. 5).
     Fms {
-        #[arg(long, default_value = "fig5_fms_sweep.csv")]
+        #[arg(long, default_value = "data/fig5_fms_sweep.csv")]
         out: PathBuf,
-        #[arg(long, default_value_t = 20)]
+        #[arg(long, default_value_t = 40)]
         steps: usize,
     },
     /// Extensive utilization sweeps of Sec. 6.2 (Figs. 6-8).
     Sweep {
         #[arg(value_enum)]
         which: SweepTarget,
-        #[arg(long, default_value = "sweep.csv")]
-        out: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
         #[arg(long, default_value_t = 30)]
         steps: usize,
         #[arg(long, default_value_t = 1000)]
@@ -94,7 +97,26 @@ fn fms_taskset() -> TaskSet {
     TaskSet::new(tasks).unwrap()
 }
 
-fn run_example() {
+fn write_schedule_csv(path: &PathBuf, schedule: &ea_imc_core::schedule::Schedule) {
+    let mut wtr = csv::Writer::from_path(path).expect("open csv");
+    wtr.write_record(["time", "task", "event", "criticality", "mode", "speed"])
+        .unwrap();
+    for e in &schedule.events {
+        wtr.write_record([
+            format!("{:.6}", e.time),
+            e.task_name.clone(),
+            format!("{:?}", e.event_type),
+            format!("{:?}", e.criticality),
+            format!("{:?}", e.mode),
+            format!("{:.6}", e.speed.value()),
+        ])
+        .unwrap();
+    }
+    wtr.flush().unwrap();
+}
+
+fn run_example(out_dir: PathBuf) {
+    std::fs::create_dir_all(&out_dir).expect("create out_dir");
     let ts = table1_taskset();
     let u = Utilizations::of(&ts);
     println!("Table 1 task set utilizations:");
@@ -162,9 +184,39 @@ fn run_example() {
             e.time, e.task_name, format!("{:?}", e.event_type), e.mode, e.speed.value()
         );
     }
+
+    write_schedule_csv(&out_dir.join("example_schedule_lo.csv"), &sched_lo);
+    write_schedule_csv(&out_dir.join("example_schedule_hi.csv"), &sched_hi);
+
+    let mut wtr = csv::Writer::from_path(out_dir.join("example_summary.csv")).expect("open csv");
+    wtr.write_record([
+        "u_lo_lo", "u_hi_lo", "u_lo_hi", "u_hi_hi", "x_at_0_5_s_lo", "x_opt", "s_lo_opt",
+        "ne_ea_imc", "ne_no_dvfs", "pct_reduction", "switch_time",
+    ])
+    .unwrap();
+    wtr.write_record([
+        format!("{:.6}", u.u_lo_lo),
+        format!("{:.6}", u.u_hi_lo),
+        format!("{:.6}", u.u_lo_hi),
+        format!("{:.6}", u.u_hi_hi),
+        format!("{:.6}", cfg.s_lo),
+        format!("{:.6}", opt.x),
+        format!("{:.6}", opt.s_lo),
+        format!("{:.6}", ne_ea_imc),
+        format!("{:.6}", ne_no_dvfs),
+        format!("{:.4}", 100.0 * (1.0 - ne_ea_imc / ne_no_dvfs)),
+        format!("{:.4}", sched_hi.mode_switch_time.unwrap_or(f64::NAN)),
+    ])
+    .unwrap();
+    wtr.flush().unwrap();
+
+    println!("\nWrote schedule + summary CSVs to {}", out_dir.display());
 }
 
 fn run_fms(out: PathBuf, steps: usize) {
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
     let ts = fms_taskset();
     let u = Utilizations::of(&ts);
     println!(
@@ -214,6 +266,10 @@ fn run_fms(out: PathBuf, steps: usize) {
 fn run_sweep(which: SweepTarget, out: PathBuf, steps: usize, repeats: usize, n_hi: usize, n_lo: usize) {
     use ea_imc_core::generator::{GeneratorConfig, TaskSetGenerator};
     use rand::{Rng, SeedableRng};
+
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
 
     let pm = PowerModel::paper_default();
     let sched = EaImcScheduler::default();
@@ -299,9 +355,17 @@ fn run_sweep(which: SweepTarget, out: PathBuf, steps: usize, repeats: usize, n_h
 fn main() {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Example => run_example(),
+        Commands::Example { out_dir } => run_example(out_dir),
         Commands::Fms { out, steps } => run_fms(out, steps),
         Commands::Sweep { which, out, steps, repeats, n_hi, n_lo } => {
+            let out = out.unwrap_or_else(|| {
+                let name = match which {
+                    SweepTarget::ULoLo => "fig6_sweep_u_lo_lo.csv",
+                    SweepTarget::UHiLo => "fig7_sweep_u_hi_lo.csv",
+                    SweepTarget::ULoHi => "fig8_sweep_u_lo_hi.csv",
+                };
+                PathBuf::from("data").join(name)
+            });
             run_sweep(which, out, steps, repeats, n_hi, n_lo)
         }
     }

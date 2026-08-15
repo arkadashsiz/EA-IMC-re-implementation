@@ -408,7 +408,7 @@ fn simulate_schedule(
     let mut switch_time: Option<f64> = None;
 
     let mut t = 0.0_f64;
-    let mut running_idx: Option<usize> = None;
+    let mut running_key: Option<(TaskId, u64)> = None; // (task_id, release-time bits) of the job physically running
 
     release_due(
         t, taskset, &mut next_release, &mut job_counters, &mut ready, mode, config, overrun,
@@ -451,7 +451,9 @@ fn simulate_schedule(
         }
 
         if let Some(i) = sel {
-            if running_idx != Some(i) {
+            let job = &ready[i];
+            let key = (job.task_id, job.release.to_bits());
+            if running_key != Some(key) {
                 let job = &mut ready[i];
                 schedule.add_event(ScheduleEvent {
                     time: t,
@@ -464,8 +466,9 @@ fn simulate_schedule(
                     remaining_execution: job.budget - job.executed,
                 });
                 job.started = true;
+                running_key = Some(key);
             }
-        } else if running_idx.is_some() {
+        } else if running_key.is_some() {
             schedule.add_event(ScheduleEvent {
                 time: t,
                 task_id: TaskId(usize::MAX),
@@ -476,6 +479,7 @@ fn simulate_schedule(
                 event_type: EventType::IdleStart,
                 remaining_execution: 0.0,
             });
+            running_key = None;
         }
 
         if let Some(i) = sel {
@@ -574,15 +578,21 @@ fn simulate_schedule(
                     event_type: EventType::JobComplete,
                     remaining_execution: 0.0,
                 });
+                let key = (j.task_id, j.release.to_bits());
+                if running_key == Some(key) {
+                    running_key = None;
+                }
+            }
+        }
+        // Any job suspended by a mode switch (handled above) that happened
+        // to be the currently-running job also frees up the processor.
+        for j in ready.iter().filter(|j| j.suspended) {
+            let key = (j.task_id, j.release.to_bits());
+            if running_key == Some(key) {
+                running_key = None;
             }
         }
         ready.retain(|j| !j.suspended && j.executed < j.budget - 1e-6);
-
-        running_idx = ready
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| a.priority_deadline.partial_cmp(&b.priority_deadline).unwrap())
-            .map(|(i, _)| i);
     }
 
     schedule.mode_switch_time = switch_time;

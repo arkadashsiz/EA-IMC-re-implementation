@@ -1,2 +1,4 @@
 target/
-
+data/
+visualization/output/
+visualization/__pycache__/
